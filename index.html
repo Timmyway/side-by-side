@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Before / After</title>
+<style>
+:root{--bg:#f6f6f4;--fg:#1c1c1a;--mut:#6b6b66;--card:#fff;--bd:#dcdcd6;--ac:#2f6fed;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--fg:#eeeeea;--mut:#9a9a94;--card:#222220;--bd:#383835;--ac:#6b9bff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#161615;--fg:#eeeeea;--mut:#9a9a94;--card:#222220;--bd:#383835;--ac:#6b9bff;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--bd);background:var(--card)}
+h1{font-size:16px;margin:0 auto 0 0}
+button,label.btn{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover,label.btn:hover{border-color:var(--ac)}
+button.on{background:var(--ac);border-color:var(--ac);color:#fff}
+input[type=file]{display:none}
+.bar{display:flex;flex-wrap:wrap;gap:8px;padding:10px 16px;align-items:center}
+.tabs{display:flex;gap:6px;overflow-x:auto;flex:1;min-width:200px}
+.tabs button{white-space:nowrap}
+.modes{display:flex;gap:4px}
+main{padding:0 16px 24px}
+.empty{border:2px dashed var(--bd);border-radius:12px;padding:48px 16px;text-align:center;color:var(--mut)}
+.empty.drag{border-color:var(--ac)}
+.stage{max-height:calc(100vh - 190px);overflow:auto;border:1px solid var(--bd);border-radius:10px;background:var(--card)}
+.cmp{position:relative;user-select:none;touch-action:pan-y;cursor:ew-resize;line-height:0}
+.cmp img{width:100%;height:auto;display:block}
+.cmp .top{position:absolute;inset:0 auto auto 0}
+.hd{position:absolute;top:0;bottom:0;width:3px;margin-left:-1.5px;background:var(--ac);pointer-events:none}
+.hd::after{content:"⇆";position:sticky;top:45vh;display:grid;place-items:center;width:34px;height:34px;margin:0 0 0 -15px;border-radius:50%;background:var(--ac);color:#fff;line-height:1}
+.tag{position:absolute;top:8px;padding:2px 8px;border-radius:6px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;line-height:1.4;pointer-events:none;z-index:2}
+.side{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--bd)}
+.side>div{position:relative;background:var(--card);line-height:0}
+.side img{width:100%;display:block}
+.row{display:flex;gap:10px;align-items:center;margin-top:8px;color:var(--mut);font-size:13px}
+input[type=range]{flex:1}
+input[type=text]{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:5px 8px;width:96px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Before / After</h1>
+  <input type="text" id="la" value="Before" aria-label="Before label">
+  <input type="text" id="lb" value="After" aria-label="After label">
+  <label class="btn">+ Before<input type="file" id="fa" accept="image/*" multiple></label>
+  <label class="btn">+ After<input type="file" id="fb" accept="image/*" multiple></label>
+  <button id="demo">Demo</button>
+  <button id="clr">Clear</button>
+</header>
+<div class="bar">
+  <div class="tabs" id="tabs"></div>
+  <div class="modes" id="modes"></div>
+</div>
+<main id="main"></main>
+<script>
+var pages=[],cur=0,mode="slider",pos=50,fade=50,flip=false;
+var $=function(s){return document.getElementById(s)};
+var MODES=[["slider","Slider"],["side","Side by side"],["toggle","Toggle"],["fade","Fade"]];
+
+function key(n){return n.replace(/\.[^.]+$/,"").toLowerCase().replace(/(before|after|old|new|avant|apres|après)/g,"").replace(/[\s_\-.]+/g," ").trim()}
+function read(f){return new Promise(function(r){var x=new FileReader();x.onload=function(){r({name:f.name,src:x.result})};x.readAsDataURL(f)})}
+function sortF(a){return a.sort(function(p,q){return p.name.localeCompare(q.name,undefined,{numeric:true})})}
+
+async function add(side,files){
+  var items=sortF(await Promise.all(Array.prototype.filter.call(files,function(f){return f.type.indexOf("image")===0}).map(read)));
+  items.forEach(function(it,i){
+    var k=key(it.name),p=pages.find(function(p){return p.k===k&&!p[side]})||pages.find(function(p){return !p[side]&&!p.k_locked&&items.length>1&&false});
+    if(!p){p=pages.find(function(p){return !p[side]&&p.idx===i&&!p.k});}
+    if(!p){p={k:k,name:k||it.name,idx:pages.length};pages.push(p)}
+    p[side]=it.src;if(!p.name||p.name===p.k)p.name=k||it.name;
+  });
+  // pair leftovers by order when names did not match
+  var la=pages.filter(function(p){return p.a&&!p.b}),lb=pages.filter(function(p){return p.b&&!p.a}),n=Math.min(la.length,lb.length);
+  for(var i=0;i<n;i++){la[i].b=lb[i].b;pages.splice(pages.indexOf(lb[i]),1)}
+  render();
+}
+
+function demoImg(v){
+  var c=document.createElement("canvas");c.width=900;c.height=560;var x=c.getContext("2d");
+  x.fillStyle=v?"#0f172a":"#f1f1ee";x.fillRect(0,0,900,560);
+  x.fillStyle=v?"#2f6fed":"#999";x.fillRect(0,0,900,64);
+  x.fillStyle="#fff";x.font="bold 22px sans-serif";x.fillText(v?"Acme — new design":"Acme — old design",24,40);
+  for(var i=0;i<3;i++){x.fillStyle=v?"#1e293b":"#ddd";x.fillRect(24+i*288,110,264,v?200:150);x.fillStyle=v?"#6b9bff":"#777";x.fillRect(40+i*288,130,120,12)}
+  x.fillStyle=v?"#22c55e":"#bbb";x.fillRect(24,v?350:300,v?200:140,44);
+  return c.toDataURL("image/png");
+}
+
+function render(){
+  if(cur>=pages.length)cur=Math.max(0,pages.length-1);
+  var t=$("tabs");t.innerHTML="";
+  pages.forEach(function(p,i){var b=document.createElement("button");b.textContent=(i+1)+". "+(p.name||"Page");if(i===cur)b.className="on";b.onclick=function(){cur=i;render()};t.appendChild(b)});
+  var m=$("modes");m.innerHTML="";
+  MODES.forEach(function(o){var b=document.createElement("button");b.textContent=o[1];if(o[0]===mode)b.className="on";b.onclick=function(){mode=o[0];render()};m.appendChild(b)});
+  var main=$("main"),p=pages[cur],A=$("la").value,B=$("lb").value;
+  if(!p){main.innerHTML='<div class="empty" id="dz">Drop screenshots here, or use the + Before / + After buttons.<br>Files are paired by name (home-before.png ↔ home-after.png) or by order.</div>';bindDrop($("dz"));return}
+  if(!p.a||!p.b){main.innerHTML='<div class="empty">This page is missing its '+(p.a?"After":"Before")+' image. Add one with the matching + button.</div>';return}
+  var h="";
+  if(mode==="slider"||mode==="fade"){
+    h='<div class="stage"><div class="cmp" id="cmp"><img src="'+p.b+'" alt="'+B+'"><img class="top" id="top" src="'+p.a+'" alt="'+A+'">'+
+      (mode==="slider"?'<div class="hd" id="hd"></div>':'')+'<span class="tag" style="left:8px">'+A+'</span><span class="tag" style="right:8px">'+B+'</span></div></div>';
+    if(mode==="fade")h+='<div class="row"><span>'+A+'</span><input type="range" id="rg" min="0" max="100" value="'+fade+'"><span>'+B+'</span></div>';
+    else h+='<div class="row">Drag anywhere on the image · ←/→ switch pages</div>';
+  }else if(mode==="side"){
+    h='<div class="stage"><div class="side"><div><span class="tag" style="left:8px">'+A+'</span><img src="'+p.a+'" alt=""></div><div><span class="tag" style="left:8px">'+B+'</span><img src="'+p.b+'" alt=""></div></div></div>';
+  }else{
+    h='<div class="stage"><div class="cmp" id="tg" style="cursor:pointer"><img src="'+(flip?p.b:p.a)+'" alt=""><span class="tag" style="left:8px">'+(flip?B:A)+'</span></div></div><div class="row">Click the image or press Space to flip</div>';
+  }
+  main.innerHTML=h;
+  var c=$("cmp");
+  if(c&&mode==="slider"){
+    var dr=false,up=function(e){var r=c.getBoundingClientRect();pos=Math.min(100,Math.max(0,(e.clientX-r.left)/r.width*100));$("top").style.clipPath="inset(0 "+(100-pos)+"% 0 0)";$("hd").style.left=pos+"%"};
+    c.onpointerdown=function(e){dr=true;c.setPointerCapture(e.pointerId);up(e)};c.onpointermove=function(e){if(dr)up(e)};c.onpointerup=function(){dr=false};
+    $("top").style.clipPath="inset(0 "+(100-pos)+"% 0 0)";$("hd").style.left=pos+"%";
+  }
+  if(mode==="fade"){var tp=$("top"),f=function(){fade=+$("rg").value;tp.style.opacity=1-fade/100};$("rg").oninput=f;f()}
+  if($("tg"))$("tg").onclick=function(){flip=!flip;render()};
+}
+
+function bindDrop(z){
+  ["dragover","dragenter"].forEach(function(e){z.addEventListener(e,function(ev){ev.preventDefault();z.classList.add("drag")})});
+  z.addEventListener("dragleave",function(){z.classList.remove("drag")});
+  z.addEventListener("drop",function(ev){ev.preventDefault();z.classList.remove("drag");
+    var fs=Array.prototype.slice.call(ev.dataTransfer.files),a=fs.filter(function(f){return /before|old|avant/i.test(f.name)}),b=fs.filter(function(f){return /after|new|apres|après/i.test(f.name)});
+    if(!a.length&&!b.length){var h=Math.ceil(fs.length/2);a=fs.slice(0,h);b=fs.slice(h)}
+    add("a",a).then(function(){return add("b",b)})});
+}
+
+$("fa").onchange=function(e){add("a",e.target.files);e.target.value=""};
+$("fb").onchange=function(e){add("b",e.target.files);e.target.value=""};
+$("la").oninput=$("lb").oninput=render;
+$("clr").onclick=function(){pages=[];cur=0;render()};
+$("demo").onclick=function(){var a=demoImg(0),b=demoImg(1);pages=[{name:"home",a:a,b:b},{name:"pricing",a:a,b:b}];cur=0;render()};
+document.addEventListener("keydown",function(e){
+  if(e.target.tagName==="INPUT"&&e.target.type==="text")return;
+  if(e.key==="ArrowRight"&&cur<pages.length-1){cur++;render()}
+  else if(e.key==="ArrowLeft"&&cur>0){cur--;render()}
+  else if(e.key===" "&&mode==="toggle"){e.preventDefault();flip=!flip;render()}
+});
+render();
+</script>
+</body>
+</html>
